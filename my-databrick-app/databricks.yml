@@ -8,10 +8,10 @@ variables:
     description: Full Lakebase Postgres database resource name. Obtain by running `databricks postgres list-databases {branch-name}`, select the desired item from the output array and use its .name value. Requires the branch resource name.
   postgres_project:
     description: Full Lakebase Postgres project resource name. Obtain by running `databricks postgres list-projects`, select the desired item from the output array and use its .name value.
-  vector_search_index:
-    description: Three-level Unity Catalog name of the private-notes Delta Sync Vector Search index.
   serving_endpoint_name:
     description: Name of a streaming-compatible Databricks Model Serving endpoint for the notes assistant.
+  embedding_endpoint_name:
+    description: Name of the Databricks Model Serving embeddings endpoint for private-note retrieval.
 
 resources:
   apps:
@@ -39,6 +39,10 @@ resources:
           serving_endpoint:
             name: ${var.serving_endpoint_name}
             permission: CAN_QUERY
+        - name: notes-embeddings
+          serving_endpoint:
+            name: ${var.embedding_endpoint_name}
+            permission: CAN_QUERY
 
 targets:
   default:
@@ -48,7 +52,7 @@ targets:
 
     variables:
       postgres_project: projects/myfirstdatabricksapp
-      postgres_branch: projects/myfirstdatabricksapp/branches/production
-      postgres_database: projects/myfirstdatabricksapp/branches/production/databases/databricks-postgres
-      vector_search_index: main.default.private_notes_index
-      serving_endpoint_name: databricks-claude-sonnet-4-5
+      postgres_branch: projects/myfirstdatabricksapp/branches/development
+      postgres_database: projects/myfirstdatabricksapp/branches/development/databases/databricks-postgres
+      serving_endpoint_name: databricks-qwen3-next-80b-a3b-instruct
+      embedding_endpoint_name: databricks-gte-large-en
