@@ -1,6 +1,6 @@
 {
-  "name": "my-databrick-app",
-  "short_name": "my-databrick-app",
+  "name": "my-app",
+  "short_name": "my-app",
   "icons": [
     {
       "src": "/favicon-192x192.png",

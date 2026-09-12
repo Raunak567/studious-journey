@@ -1,5 +1,5 @@
 bundle:
-  name: my-databrick-app
+  name: my-app
 
 variables:
   postgres_branch:
@@ -8,15 +8,11 @@ variables:
     description: Full Lakebase Postgres database resource name. Obtain by running `databricks postgres list-databases {branch-name}`, select the desired item from the output array and use its .name value. Requires the branch resource name.
   postgres_project:
     description: Full Lakebase Postgres project resource name. Obtain by running `databricks postgres list-projects`, select the desired item from the output array and use its .name value.
-  serving_endpoint_name:
-    description: Name of a streaming-compatible Databricks Model Serving endpoint for the notes assistant.
-  embedding_endpoint_name:
-    description: Name of the Databricks Model Serving embeddings endpoint for private-note retrieval.
 
 resources:
   apps:
     app:
-      name: "my-databrick-app"
+      name: "my-app"
       description: "A Databricks App powered by AppKit"
       source_code_path: ./
 
@@ -24,9 +20,8 @@ resources:
       lifecycle:
         started: true
       # Uncomment to enable on behalf of user API scopes. Available scopes: sql, dashboards.genie, files.files, serving.serving-endpoints
-      user_api_scopes:
-        - postgres
-        - serving.serving-endpoints
+      # user_api_scopes:
+      #   - sql
 
       # The resources which this app has access to.
       resources:
@@ -35,14 +30,6 @@ resources:
             branch: ${var.postgres_branch}
             database: ${var.postgres_database}
             permission: CAN_CONNECT_AND_CREATE
-        - name: notes-assistant
-          serving_endpoint:
-            name: ${var.serving_endpoint_name}
-            permission: CAN_QUERY
-        - name: notes-embeddings
-          serving_endpoint:
-            name: ${var.embedding_endpoint_name}
-            permission: CAN_QUERY
 
 targets:
   default:
@@ -51,8 +38,5 @@ targets:
       host: https://dbc-9fbaad2a-655d.cloud.databricks.com
 
     variables:
-      postgres_project: projects/myfirstdatabricksapp
-      postgres_branch: projects/myfirstdatabricksapp/branches/development
-      postgres_database: projects/myfirstdatabricksapp/branches/development/databases/databricks-postgres
-      serving_endpoint_name: databricks-qwen3-next-80b-a3b-instruct
-      embedding_endpoint_name: databricks-gte-large-en
+      postgres_branch: projects/myfirstdatabricksapp/branches/production
+      postgres_database: projects/myfirstdatabricksapp/branches/production/databases/databricks-postgres

@@ -1,8 +1,0 @@
-command: ['npm', 'run', 'start']
-env:
-  - name: LAKEBASE_ENDPOINT
-    valueFrom: postgres
-  - name: DATABRICKS_VS_INDEX_NAME
-    value: ${var.vector_search_index}
-  - name: DATABRICKS_SERVING_ENDPOINT_NAME
-    value: ${var.serving_endpoint_name}
