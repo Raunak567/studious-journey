@@ -5,19 +5,17 @@ import {
   Archive,
   Bot,
   Check,
-  ChevronDown,
   Clock3,
   FileText,
   Hash,
   LayoutDashboard,
   Menu,
-  MessageSquare,
   Plus,
   Search,
   Send,
-  Settings,
   Sparkles,
   Tag,
+  Timer,
   Trash2,
   X,
 } from "lucide-react";
@@ -40,31 +38,6 @@ const API = {
   tags: "/api/tags",
   assistant: "/api/assistant",
 };
-
-const initialNotes: Note[] = [
-  {
-    id: 1,
-    title: "Kubernetes Setup",
-    content:
-      "# Kubernetes Setup\n\nI deployed a lightweight **K3s cluster** on AWS.\n\n- K3s\n- Terraform\n- Ansible\n- AWS ALB Controller\n- ACM",
-    priority: "High",
-    archived: false,
-    tags: ["kubernetes", "aws", "devops"],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    title: "Databricks Lakebase",
-    content:
-      "# Lakebase\n\nLakebase provides a PostgreSQL-compatible database for Databricks applications.\n\nUseful for persistent application data and CRUD APIs.",
-    priority: "Medium",
-    archived: false,
-    tags: ["databricks", "lakebase"],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
 
 type Page = "dashboard" | "notes" | "tags" | "time" | "assistant";
 
@@ -92,12 +65,6 @@ export default function App() {
 
       if (saved) {
         setNotes(JSON.parse(saved));
-      } else {
-        setNotes(initialNotes);
-        localStorage.setItem(
-          "knowledge-base-notes",
-          JSON.stringify(initialNotes),
-        );
       }
     } finally {
       setLoading(false);
@@ -497,7 +464,6 @@ function Stat({
 function NotesPage({
   notes,
   openNote,
-  createNote,
 }: {
   notes: Note[];
   openNote: (note: Note) => void;
@@ -670,13 +636,32 @@ function NoteEditor({
   onArchive: (note: Note) => void;
 }) {
   const [draft, setDraft] = useState(note);
-  const [preview, setPreview] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [saved, setSaved] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerLogs, setTimerLogs] = useState<
+    { id: number; duration: number; completed_at: string }[]
+  >(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem(`knowledge-base-timer-logs-${note.id}`) || "[]",
+      );
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     setDraft(note);
   }, [note]);
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const interval = window.setInterval(() => setTimerSeconds((previous) => previous + 1), 1000);
+    return () => window.clearInterval(interval);
+  }, [timerRunning]);
+
 
   function update<K extends keyof Note>(key: K, value: Note[K]) {
     setDraft((previous) => ({
@@ -708,161 +693,185 @@ function NoteEditor({
   async function handleSave() {
     await onSave(draft);
     setSaved(true);
+    window.setTimeout(() => setSaved(false), 1500);
+  }
 
-    setTimeout(() => setSaved(false), 1500);
+  function addTimerLog(duration: number) {
+    const entry = { id: Date.now(), duration, completed_at: new Date().toISOString() };
+    setTimerLogs((previous) => {
+      const next = [entry, ...previous].slice(0, 20);
+      localStorage.setItem(`knowledge-base-timer-logs-${note.id}`, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function toggleTimer() {
+    setTimerRunning((previous) => !previous);
+  }
+
+  function resetTimer() {
+    if (timerSeconds > 0) addTimerLog(timerSeconds);
+    setTimerRunning(false);
+    setTimerSeconds(0);
+  }
+
+  function formatTimer(seconds: number) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return `${minutes}:${String(remaining).padStart(2, "0")}`;
+  }
+
+  function formatDuration(seconds: number) {
+    if (seconds < 60) return `${seconds} sec`;
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return remaining ? `${minutes}m ${remaining}s` : `${minutes} min`;
   }
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <button
-        onClick={onBack}
-        className="mb-6 flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-100"
-      >
-        <ArrowLeft size={16} />
-        Back to notes
-      </button>
+    <div className="mx-auto max-w-7xl">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          <ArrowLeft size={16} />
+          Back to notes
+        </button>
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900">
-        <div className="flex flex-col justify-between gap-4 border-b border-zinc-800 p-5 md:flex-row md:items-center">
-          <input
-            value={draft.title}
-            onChange={(event) =>
-              update("title", event.target.value)
-            }
-            className="min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none"
-            placeholder="Note title"
-          />
+        <button
+          onClick={() => {
+            handleSave();
+            resetTimer();
+          }}
+          className="flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-400"
+        >
+          {saved ? <Check size={15} /> : null}
+          {saved ? "Saved" : "Save note"}
+        </button>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={draft.priority}
-              onChange={(event) =>
-                update(
-                  "priority",
-                  event.target.value as Priority,
-                )
-              }
-              className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm"
-            >
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-            </select>
-
-            <button
-              onClick={() => onArchive(draft)}
-              className="flex h-9 items-center gap-2 rounded-lg border border-zinc-800 px-3 text-sm hover:bg-zinc-800"
-            >
-              <Archive size={15} />
-              <span className="hidden sm:inline">
-                {draft.archived ? "Unarchive" : "Archive"}
-              </span>
-            </button>
-
-            <button
-              onClick={() => onDelete(draft.id)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 text-zinc-500 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
-            >
-              <Trash2 size={15} />
-            </button>
+      <div className="space-y-4">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <input value={draft.title} onChange={(event) => update("title", event.target.value)} className="min-w-0 flex-1 bg-transparent text-2xl font-semibold outline-none" placeholder="Note title" />
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <div className="flex h-9 items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2">
+                  <Timer size={14} className="text-zinc-500" />
+                  <span className="min-w-[42px] text-center font-mono text-sm tabular-nums text-zinc-200" aria-live="polite">{formatTimer(timerSeconds)}</span>
+                  <button onClick={toggleTimer} className="rounded-md px-2 py-1 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white">{timerRunning ? "Pause" : "Start"}</button>
+                  <button onClick={resetTimer} className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200">Stop</button>
+                </div>
+                <select value={draft.priority} onChange={(event) => update("priority", event.target.value as Priority)} className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-sm"><option>Low</option><option>Medium</option><option>High</option></select>
+                <button onClick={() => onArchive(draft)} className="flex h-9 items-center gap-2 rounded-lg border border-zinc-800 px-3 text-sm hover:bg-zinc-800"><Archive size={15} />{draft.archived ? "Unarchive" : "Archive"}</button>
+                <button onClick={() => onDelete(draft.id)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 text-zinc-500 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400" aria-label="Delete note"><Trash2 size={15} /></button>
+              </div>
+            </div>
+            <div className="border-t border-zinc-800 pt-3"><div className="flex flex-wrap items-center gap-2">{draft.tags.map((tag) => (<button key={tag} onClick={() => removeTag(tag)} className="group flex items-center gap-1 rounded-md bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300">#{tag}<X size={11} className="hidden group-hover:block" /></button>))}<input value={tagInput} onChange={(event) => setTagInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} placeholder="+ Add tag" className="w-24 bg-transparent text-xs outline-none" /></div></div>
           </div>
         </div>
 
-        <div className="border-b border-zinc-800 px-5 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {draft.tags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => removeTag(tag)}
-                className="group flex items-center gap-1 rounded-md bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300"
-              >
-                #{tag}
-                <X
-                  size={11}
-                  className="hidden group-hover:block"
-                />
-              </button>
-            ))}
+        {/* Markdown editor + preview side by side */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+            <div>
+              <h2 className="font-medium">Write & Preview</h2>
+              <p className="text-xs text-zinc-500">
+                Markdown editor and live rendered preview.
+              </p>
+            </div>
+            <span className="text-xs text-zinc-500">Live preview</span>
+          </div>
 
-            <input
-              value={tagInput}
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addTag();
-                }
-              }}
-              placeholder="+ Add tag"
-              className="w-24 bg-transparent text-xs outline-none"
-            />
+          <div className="grid min-h-[560px] lg:grid-cols-2">
+            <div className="border-b border-zinc-800 p-5 lg:border-b-0 lg:border-r">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Markdown
+              </div>
+              <textarea
+                value={draft.content}
+                onChange={(event) => update("content", event.target.value)}
+                placeholder="Write your note in Markdown..."
+                className="min-h-[500px] w-full resize-none bg-transparent font-mono text-sm leading-7 outline-none"
+                spellCheck={false}
+              />
+            </div>
+
+            <div className="p-5">
+              <div className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Preview
+              </div>
+              <article className="prose prose-invert max-w-none text-sm">
+                <ReactMarkdown>
+                  {draft.content || "*Nothing here yet.*"}
+                </ReactMarkdown>
+              </article>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between border-t border-zinc-800 px-5 py-4">
+            <span className="text-xs text-zinc-400">
+              {saved
+                ? "Saved"
+                : `Last updated ${formatDate(draft.updated_at)}`}
+            </span>
+
+            <span className="text-xs text-zinc-500">
+              {draft.content.length} characters
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
-          <div className="flex rounded-lg bg-zinc-800 p-1">
-            <button
-              onClick={() => setPreview(false)}
-              className={`rounded-md px-3 py-1.5 text-xs ${
-                !preview
-                  ? " bg-zinc-700 font-medium text-white shadow-sm"
-                  : "text-zinc-500"
-              }`}
-            >
-              Markdown
-            </button>
-
-            <button
-              onClick={() => setPreview(true)}
-              className={`rounded-md px-3 py-1.5 text-xs ${
-                preview
-                  ? " bg-zinc-700 font-medium text-white shadow-sm"
-                  : "text-zinc-500"
-              }`}
-            >
-              Preview
-            </button>
+        {/* Timer log at bottom */}
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+            <div>
+              <h2 className="font-medium">Timer Log</h2>
+              <p className="mt-1 text-xs text-zinc-500">
+                Recorded writing sessions for this note.
+              </p>
+            </div>
+            <span className="rounded-md bg-zinc-800 px-2 py-1 text-xs text-zinc-400">
+              {timerLogs.length} sessions
+            </span>
           </div>
 
-          <span className="text-xs text-zinc-400">
-            Markdown supported
-          </span>
-        </div>
-
-        <div className="min-h-[500px] p-5">
-          {preview ? (
-            <article className="prose prose-invert max-w-none text-sm">
-              <ReactMarkdown>
-                {draft.content || "*Nothing here yet.*"}
-              </ReactMarkdown>
-            </article>
+          {timerLogs.length === 0 ? (
+            <div className="px-5 py-8 text-center">
+              <Timer className="mx-auto mb-2 text-zinc-600" size={22} />
+              <p className="text-sm text-zinc-400">No timer sessions yet.</p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Completed sessions will appear here.
+              </p>
+            </div>
           ) : (
-            <textarea
-              value={draft.content}
-              onChange={(event) =>
-                update("content", event.target.value)
-              }
-              placeholder="Write your note in Markdown..."
-              className="min-h-[500px] w-full resize-none bg-transparent font-mono text-sm leading-7 outline-none"
-              spellCheck={false}
-            />
+            <div className="divide-y divide-zinc-800">
+              {timerLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between gap-4 px-5 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-800">
+                      <Timer size={14} className="text-zinc-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm text-zinc-200">
+                        Writing session
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {new Date(log.completed_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium text-zinc-300">
+                    {formatDuration(log.duration)}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-zinc-800 px-5 py-4">
-          <span className="text-xs text-zinc-400">
-            {saved
-              ? "Saved"
-              : `Last updated ${formatDate(draft.updated_at)}`}
-          </span>
-
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-indigo-500/20 hover:bg-indigo-400"
-          >
-            {saved ? <Check size={15} /> : null}
-            {saved ? "Saved" : "Save note"}
-          </button>
         </div>
       </div>
     </div>

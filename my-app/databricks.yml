@@ -38,5 +38,6 @@ targets:
       host: https://dbc-9fbaad2a-655d.cloud.databricks.com
 
     variables:
+      postgres_project: projects/myfirstdatabricksapp
       postgres_branch: projects/myfirstdatabricksapp/branches/production
       postgres_database: projects/myfirstdatabricksapp/branches/production/databases/databricks-postgres
